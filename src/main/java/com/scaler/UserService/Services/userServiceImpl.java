@@ -1,10 +1,14 @@
 package com.scaler.UserService.Services;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.scaler.UserService.DTO.SendEmailDTO;
 import com.scaler.UserService.Models.Token;
 import com.scaler.UserService.Models.User;
 import com.scaler.UserService.Repository.TokenRepository;
 import com.scaler.UserService.Repository.UserRepository;
 import org.apache.commons.lang3.RandomStringUtils;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -20,12 +24,16 @@ public class userServiceImpl implements UserService{
     private BCryptPasswordEncoder bCryptPasswordEncoder;
     private UserRepository userRepository;
     private TokenRepository tokenRepository;
+    private KafkaTemplate<String, String> kafkaTemplate;
+    private ObjectMapper objectMapper;
 
 
-    public userServiceImpl(BCryptPasswordEncoder bCryptPasswordEncoder,UserRepository userRepository,TokenRepository tokenRepository){
+    public userServiceImpl(BCryptPasswordEncoder bCryptPasswordEncoder,UserRepository userRepository,TokenRepository tokenRepository,KafkaTemplate<String, String> kafkaTemplate,ObjectMapper objectMapper){
         this.bCryptPasswordEncoder=bCryptPasswordEncoder;
         this.userRepository=userRepository;
         this.tokenRepository=tokenRepository;
+        this.kafkaTemplate=kafkaTemplate;
+        this.objectMapper=objectMapper;
     }
     @Override
     public Token login(String email, String password) {
@@ -56,6 +64,18 @@ public class userServiceImpl implements UserService{
         user.setName(name);
         user.setEmail(email);
         user.setPassword(bCryptPasswordEncoder.encode(password));
+        SendEmailDTO sendEmailDTO=new SendEmailDTO();
+        sendEmailDTO.setBody("Hello welcome to my life");
+        sendEmailDTO.setSubject("Reg : Welcome to my life");
+        sendEmailDTO.setEmail(email);
+        try {
+            kafkaTemplate.send(
+                    "sendEmail",
+                    objectMapper.writeValueAsString(sendEmailDTO)
+            );
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException(e);
+        }
 
         return userRepository.save(user);
     }
